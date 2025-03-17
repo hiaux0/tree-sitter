@@ -237,152 +237,169 @@ async function main() {
 
   switch (command) {
     case 'parse':
-      if (!args[1]) {
+      if (args.length < 2) {
         console.error('Error: Missing corpus file path');
         process.exit(1);
       }
-
-      try {
-        const sections = await parser.parseFile(args[1]);
-        console.log(JSON.stringify(sections, null, 2));
-      } catch (error) {
-        console.error('Error parsing corpus file:', error);
-        process.exit(1);
-      }
-      break;
-
-    case 'summary':
-      if (!args[1]) {
-        console.error('Error: Missing corpus file path');
-        process.exit(1);
-      }
-
-      try {
-        const sections = await parser.parseFile(args[1]);
-
-        console.log(`Corpus File: ${args[1]}`);
-        console.log(`Sections: ${sections.length}`);
-
-        let totalExamples = 0;
-
-        for (const section of sections) {
-          console.log(`\nSection: ${section.name}`);
-          console.log(`  Examples: ${section.examples.length}`);
-
-          for (const example of section.examples) {
-            console.log(`  - Input: ${example.metadata.inputCode.split('\n')[0]}${
-              example.metadata.inputCode.split('\n').length > 1 ? ' ...' : ''
-            }`);
-            totalExamples++;
-          }
-        }
-
-        console.log(`\nTotal examples: ${totalExamples}`);
-      } catch (error) {
-        console.error('Error parsing corpus file:', error);
-        process.exit(1);
-      }
-      break;
-
-    case 'extract':
-      if (!args[1]) {
-        console.error('Error: Missing directory path');
-        process.exit(1);
-      }
-
-      try {
-        const dir = args[1];
-        const files = findCorpusFiles(dir);
-
-        console.log(`Found ${files.length} corpus files:`);
-        for (const file of files) {
-          console.log(`- ${file}`);
-        }
-
-        if (files.length > 0) {
-          const outputDir = path.join(process.cwd(), 'extracted-corpus');
-          if (!fs.existsSync(outputDir)) {
-            fs.mkdirSync(outputDir, { recursive: true });
-          }
-
-          for (const file of files) {
-            const sections = await parser.parseFile(file);
-            const basename = path.basename(file, '.txt');
-            const output = path.join(outputDir, `${basename}.json`);
-            fs.writeFileSync(output, JSON.stringify(sections, null, 2));
-            console.log(`Extracted ${file} to ${output}`);
-          }
-        }
-      } catch (error) {
-        console.error('Error extracting corpus files:', error);
-        process.exit(1);
-      }
+      await handleParse(parser, args[1]);
       break;
 
     case 'validate':
       if (args.length < 3) {
         console.error('Error: Missing grammar path or corpus file path');
-        console.error('Usage: corpus-test validate <grammar> <file>');
         process.exit(1);
       }
+      await handleValidate(parser, args[1], args[2]);
+      break;
 
-      try {
-        const grammarPath = args[1];
-        const corpusPath = args[2];
-
-        // Check if grammar file exists
-        if (!fs.existsSync(grammarPath)) {
-          console.error(`Error: Grammar file not found: ${grammarPath}`);
-          process.exit(1);
-        }
-
-        // Check if corpus file exists
-        if (!fs.existsSync(corpusPath)) {
-          console.error(`Error: Corpus file not found: ${corpusPath}`);
-          process.exit(1);
-        }
-
-        // Load the grammar (assuming it's a JavaScript grammar or can be required)
-        let grammar;
-        try {
-          grammar = require(path.resolve(grammarPath));
-        } catch (e) {
-          console.error(`Error loading grammar: ${e.message}`);
-          process.exit(1);
-        }
-
-        // Validate corpus against grammar
-        const results = await parser.validateCorpus(grammar, corpusPath);
-
-        // Print results
-        console.log(`\nValidation Results for ${corpusPath}:`);
-        console.log(`Passing tests: ${results.passing.length}`);
-        console.log(`Failing tests: ${results.failing.length}`);
-
-        if (results.failing.length > 0) {
-          console.log('\nFailing Tests:');
-          for (const failure of results.failing) {
-            console.log(`\nSection: ${failure.section}`);
-            console.log(`Example at line ${failure.metadata.line}`);
-            console.log(`\nExpected Tree:`);
-            console.log(failure.expected);
-            console.log(`\nActual Tree:`);
-            console.log(failure.actual);
-            console.log('\n---');
-          }
-          process.exit(1);
-        } else {
-          console.log('\nAll tests passed!');
-        }
-      } catch (error) {
-        console.error('Error validating corpus file:', error);
+    case 'extract':
+      if (args.length < 2) {
+        console.error('Error: Missing directory path');
         process.exit(1);
       }
+      await handleExtract(parser, args[1]);
+      break;
+
+    case 'summary':
+      if (args.length < 2) {
+        console.error('Error: Missing corpus file path');
+        process.exit(1);
+      }
+      await handleSummary(parser, args[1]);
       break;
 
     default:
       console.error(`Unknown command: ${command}`);
       process.exit(1);
+  }
+}
+
+/**
+ * Parse a corpus file and output JSON
+ * @param {CorpusParser} parser - The corpus parser instance
+ * @param {string} filepath - Path to the corpus file
+ */
+async function handleParse(parser, filepath) {
+  try {
+    const tests = await parser.parseFile(filepath);
+    console.log(JSON.stringify(tests, null, 2));
+  } catch (error) {
+    console.error(`Error parsing file ${filepath}: ${error.message}`);
+    process.exit(1);
+  }
+}
+
+/**
+ * Validate a corpus against a grammar
+ * @param {CorpusParser} parser - The corpus parser instance
+ * @param {string} grammarPath - Path to the Tree-sitter grammar
+ * @param {string} corpusPath - Path to the corpus file
+ */
+async function handleValidate(parser, grammarPath, corpusPath) {
+  try {
+    // Load the grammar
+    const absoluteGrammarPath = path.resolve(grammarPath);
+    // Try to load the grammar as a Node.js module
+    let grammar;
+    try {
+      grammar = require(absoluteGrammarPath);
+    } catch (e) {
+      // If it's not a direct module, assume it's a compiled .wasm file
+      if (!fs.existsSync(absoluteGrammarPath)) {
+        throw new Error(`Grammar file not found: ${absoluteGrammarPath}`);
+      }
+
+      // Try to use Tree-sitter's API to load the grammar
+      const Parser = require('tree-sitter');
+      const Language = require('tree-sitter/bindings/node');
+      grammar = new Parser();
+      grammar.setLanguage(Language.loadLanguage(absoluteGrammarPath));
+    }
+
+    const results = await parser.validateCorpus(grammar, corpusPath);
+
+    console.log(`\nTest Results for ${corpusPath}:`);
+    console.log(`✓ Passing: ${results.passing.length} tests`);
+    if (results.failing.length > 0) {
+      console.log(`✗ Failing: ${results.failing.length} tests`);
+
+      for (const failure of results.failing) {
+        console.log(`\n✗ FAIL: ${failure.name}`);
+        console.log(`  Location: ${failure.metadata.filepath}:${failure.metadata.exampleLine}`);
+        console.log('  Expected:');
+        console.log(`  ${failure.expected.split('\n').join('\n  ')}`);
+        console.log('  Actual:');
+        console.log(`  ${failure.actual.split('\n').join('\n  ')}`);
+      }
+
+      process.exit(1);
+    } else {
+      console.log('All tests passed!');
+    }
+  } catch (error) {
+    console.error(`Error validating corpus: ${error.message}`);
+    process.exit(1);
+  }
+}
+
+/**
+ * Extract all corpus files from a directory
+ * @param {CorpusParser} parser - The corpus parser instance
+ * @param {string} directory - Path to the directory
+ */
+async function handleExtract(parser, directory) {
+  try {
+    const corpusFiles = findCorpusFiles(directory);
+    console.log(`Found ${corpusFiles.length} corpus files in ${directory}`);
+
+    const allTests = [];
+    for (const file of corpusFiles) {
+      console.log(`Parsing ${file}...`);
+      const tests = await parser.parseFile(file);
+      allTests.push(...tests);
+    }
+
+    console.log(`Extracted ${allTests.length} tests from ${corpusFiles.length} files`);
+    console.log(JSON.stringify(allTests, null, 2));
+  } catch (error) {
+    console.error(`Error extracting corpus files: ${error.message}`);
+    process.exit(1);
+  }
+}
+
+/**
+ * Print a summary of a corpus file
+ * @param {CorpusParser} parser - The corpus parser instance
+ * @param {string} filepath - Path to the corpus file
+ */
+async function handleSummary(parser, filepath) {
+  try {
+    const tests = await parser.parseFile(filepath);
+    console.log(`\nCorpus Summary for ${filepath}:`);
+    console.log(`Total tests: ${tests.length}`);
+
+    // Group tests by section
+    const sections = {};
+    for (const test of tests) {
+      const section = test.metadata.sectionName;
+      if (!sections[section]) {
+        sections[section] = [];
+      }
+      sections[section].push(test);
+    }
+
+    console.log(`Total sections: ${Object.keys(sections).length}`);
+
+    // Print section details
+    for (const [section, sectionTests] of Object.entries(sections)) {
+      console.log(`\n${section} (${sectionTests.length} tests):`);
+      for (const test of sectionTests) {
+        console.log(`  - ${test.metadata.exampleName || 'Unnamed Example'} (Line ${test.metadata.exampleLine})`);
+      }
+    }
+  } catch (error) {
+    console.error(`Error summarizing file ${filepath}: ${error.message}`);
+    process.exit(1);
   }
 }
 
