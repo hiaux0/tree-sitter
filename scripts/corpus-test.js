@@ -38,7 +38,7 @@ class CorpusParser {
         if (currentSection && currentExample) {
           // Create unified test object instead of separate section/example
           this.tests.push({
-            headerText: currentSection.name, // Use the extracted name as headerText
+            title: currentSection.name, // Use the extracted name as title
             name: currentSection.name + " - " + currentExample.name,
             code: currentExample.source.trim(),
             parsed: currentExample.tree.trim(),
@@ -67,7 +67,7 @@ class CorpusParser {
             filepath: filepath,
             header: name,
             line: i + 1,
-            headerText: name, // Store just the extracted name as headerText, not the full line
+            title: name, // Store just the extracted name as title, not the full line
             rawHeaderLine: line, // Keep the original line with equals signs if needed
             description: "", // Will store description text if present
           },
@@ -91,7 +91,7 @@ class CorpusParser {
         if (currentExample) {
           // Create unified test object for previous example
           this.tests.push({
-            headerText: currentSection.name, // Use the extracted name as headerText
+            title: currentSection.name, // Use the extracted name as title
             name: currentSection.name + " - " + currentExample.name,
             code: currentExample.source.trim(),
             parsed: currentExample.tree.trim(),
@@ -147,7 +147,7 @@ class CorpusParser {
     // Add the last example if there is one
     if (currentSection && currentExample) {
       this.tests.push({
-        headerText: currentSection.name, // Use the extracted name as headerText
+        title: currentSection.name, // Use the extracted name as title
         code: currentSection.metadata.description.trim(),
         parsed: currentExample.tree.trim(),
         filepath: filepath,
@@ -191,13 +191,13 @@ class CorpusParser {
       if (this.normalizeTree(treeString) === this.normalizeTree(test.parsed)) {
         results.passing.push({
           name: test.name,
-          headerText: test.headerText,
+          title: test.title,
           metadata: test.metadata,
         });
       } else {
         results.failing.push({
           name: test.name,
-          headerText: test.headerText,
+          title: test.title,
           expected: test.parsed,
           actual: treeString,
           metadata: test.metadata,
