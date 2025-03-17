@@ -1,6 +1,6 @@
 /**
- * Tree-sitter Corpus Parser
- * A Node.js implementation of Tree-sitter's corpus test parser
+ * Tree-sitter Enhanced Corpus Parser
+ * A Node.js implementation of Tree-sitter's corpus test parser with metadata extraction
  */
 
 class CorpusParser {
@@ -11,9 +11,10 @@ class CorpusParser {
   /**
    * Parse a corpus test file
    * @param {string} content - The content of the corpus file
+   * @param {string} [filepath=null] - Optional file path for the corpus file
    * @returns {Object[]} Array of test sections
    */
-  parse(content) {
+  parse(content, filepath = null) {
     if (!content) return [];
 
     const lines = content.split('\n');
@@ -32,7 +33,15 @@ class CorpusParser {
         }
 
         const name = line.replace(/^===+\s*/, '').replace(/\s*===+$/, '');
-        currentSection = { name, examples: [] };
+        currentSection = {
+          name,
+          examples: [],
+          metadata: {
+            filepath: filepath,
+            header: name,
+            line: i + 1
+          }
+        };
         this.sections.push(currentSection);
         currentExample = null;
         continue;
@@ -45,7 +54,15 @@ class CorpusParser {
         }
 
         const name = line.replace(/^---+\s*/, '').replace(/\s*---+$/, '');
-        currentExample = { name, source: '', tree: '' };
+        currentExample = {
+          name,
+          source: '',
+          tree: '',
+          metadata: {
+            line: i + 1,
+            inputCode: ''
+          }
+        };
         parsingSource = true;
         parsingTree = false;
         continue;
@@ -64,6 +81,7 @@ class CorpusParser {
 
         if (parsingSource) {
           currentExample.source += line + '\n';
+          currentExample.metadata.inputCode += line + '\n';
         } else if (parsingTree) {
           currentExample.tree += line + '\n';
         }
@@ -80,6 +98,7 @@ class CorpusParser {
       for (const example of section.examples) {
         example.source = example.source.trim();
         example.tree = example.tree.trim();
+        example.metadata.inputCode = example.metadata.inputCode.trim();
       }
     }
 
@@ -94,7 +113,7 @@ class CorpusParser {
   async parseFile(filepath) {
     const fs = require('fs').promises;
     const content = await fs.readFile(filepath, 'utf8');
-    return this.parse(content);
+    return this.parse(content, filepath);
   }
 
   /**
@@ -117,14 +136,22 @@ class CorpusParser {
         if (this.normalizeTree(treeString) === this.normalizeTree(example.tree)) {
           results.passing.push({
             section: section.name,
-            example: example.name
+            example: example.name,
+            metadata: {
+              ...section.metadata,
+              ...example.metadata
+            }
           });
         } else {
           results.failing.push({
             section: section.name,
             example: example.name,
             expected: example.tree,
-            actual: treeString
+            actual: treeString,
+            metadata: {
+              ...section.metadata,
+              ...example.metadata
+            }
           });
         }
       }

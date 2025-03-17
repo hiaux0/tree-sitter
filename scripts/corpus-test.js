@@ -1,36 +1,9 @@
+#!/usr/bin/env node
 
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 const CorpusParser = require('./corpus-parser');
-
-
-
-// Example usage
-// if (require.main === module) {
-//   const path = require('path');
-
-//   async function runExample() {
-//     const parser = new CorpusParser();
-//     const testPath = process.argv[2];
-
-//     if (!testPath) {
-//       console.error('Please provide a path to a corpus test file');
-//       process.exit(1);
-//     }
-
-//     try {
-//       const sections = await parser.parseFile(testPath);
-//       console.log(JSON.stringify(sections, null, 2));
-//     } catch (error) {
-//       console.error('Error parsing corpus file:', error);
-//       process.exit(1);
-//     }
-//   }
-
-//   runExample();
-// }
-
 
 async function main() {
   const args = process.argv.slice(2);
@@ -42,11 +15,11 @@ async function main() {
     console.error('  parse <file>             Parse a corpus test file and output JSON');
     console.error('  validate <grammar> <file> Validate a corpus against a grammar');
     console.error('  extract <directory>      Extract all corpus files from a directory');
+    console.error('  summary <file>           Print a summary of a corpus file');
     process.exit(1);
   }
 
   const command = args[0];
-  /*prettier-ignore*/ console.log('>>>> _ >>>> ~ corpus-test.js:49 ~ main ~ command:', command)
   const parser = new CorpusParser();
 
   switch (command) {
@@ -59,6 +32,39 @@ async function main() {
       try {
         const sections = await parser.parseFile(args[1]);
         console.log(JSON.stringify(sections, null, 2));
+      } catch (error) {
+        console.error('Error parsing corpus file:', error);
+        process.exit(1);
+      }
+      break;
+
+    case 'summary':
+      if (!args[1]) {
+        console.error('Error: Missing corpus file path');
+        process.exit(1);
+      }
+
+      try {
+        const sections = await parser.parseFile(args[1]);
+
+        console.log(`Corpus File: ${args[1]}`);
+        console.log(`Sections: ${sections.length}`);
+
+        let totalExamples = 0;
+
+        for (const section of sections) {
+          console.log(`\nSection: ${section.name}`);
+          console.log(`  Examples: ${section.examples.length}`);
+
+          for (const example of section.examples) {
+            console.log(`  - Input: ${example.metadata.inputCode.split('\n')[0]}${
+              example.metadata.inputCode.split('\n').length > 1 ? ' ...' : ''
+            }`);
+            totalExamples++;
+          }
+        }
+
+        console.log(`\nTotal examples: ${totalExamples}`);
       } catch (error) {
         console.error('Error parsing corpus file:', error);
         process.exit(1);
