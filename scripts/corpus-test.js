@@ -106,6 +106,67 @@ async function main() {
       }
       break;
 
+    case 'validate':
+      if (args.length < 3) {
+        console.error('Error: Missing grammar path or corpus file path');
+        console.error('Usage: corpus-test validate <grammar> <file>');
+        process.exit(1);
+      }
+
+      try {
+        const grammarPath = args[1];
+        const corpusPath = args[2];
+
+        // Check if grammar file exists
+        if (!fs.existsSync(grammarPath)) {
+          console.error(`Error: Grammar file not found: ${grammarPath}`);
+          process.exit(1);
+        }
+
+        // Check if corpus file exists
+        if (!fs.existsSync(corpusPath)) {
+          console.error(`Error: Corpus file not found: ${corpusPath}`);
+          process.exit(1);
+        }
+
+        // Load the grammar (assuming it's a JavaScript grammar or can be required)
+        let grammar;
+        try {
+          grammar = require(path.resolve(grammarPath));
+        } catch (e) {
+          console.error(`Error loading grammar: ${e.message}`);
+          process.exit(1);
+        }
+
+        // Validate corpus against grammar
+        const results = await parser.validateCorpus(grammar, corpusPath);
+
+        // Print results
+        console.log(`\nValidation Results for ${corpusPath}:`);
+        console.log(`Passing tests: ${results.passing.length}`);
+        console.log(`Failing tests: ${results.failing.length}`);
+
+        if (results.failing.length > 0) {
+          console.log('\nFailing Tests:');
+          for (const failure of results.failing) {
+            console.log(`\nSection: ${failure.section}`);
+            console.log(`Example at line ${failure.metadata.line}`);
+            console.log(`\nExpected Tree:`);
+            console.log(failure.expected);
+            console.log(`\nActual Tree:`);
+            console.log(failure.actual);
+            console.log('\n---');
+          }
+          process.exit(1);
+        } else {
+          console.log('\nAll tests passed!');
+        }
+      } catch (error) {
+        console.error('Error validating corpus file:', error);
+        process.exit(1);
+      }
+      break;
+
     default:
       console.error(`Unknown command: ${command}`);
       process.exit(1);

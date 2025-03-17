@@ -39,12 +39,19 @@ class CorpusParser {
           metadata: {
             filepath: filepath,
             header: name,
-            line: i + 1
+            line: i + 1,
+            headerText: line,
+            description: ''  // Will store description text if present
           }
         };
         this.sections.push(currentSection);
         currentExample = null;
         continue;
+      }
+
+      // Collect description text for the section (text between section header and first example)
+      if (currentSection && !currentExample && line.trim() !== '' && !line.startsWith('---')) {
+        currentSection.metadata.description += line + '\n';
       }
 
       // Example header (---)
@@ -60,7 +67,9 @@ class CorpusParser {
           tree: '',
           metadata: {
             line: i + 1,
-            inputCode: ''
+            inputCode: '',
+            treeText: '',
+            separator: line
           }
         };
         parsingSource = true;
@@ -84,6 +93,7 @@ class CorpusParser {
           currentExample.metadata.inputCode += line + '\n';
         } else if (parsingTree) {
           currentExample.tree += line + '\n';
+          currentExample.metadata.treeText += line + '\n';
         }
       }
     }
@@ -95,10 +105,13 @@ class CorpusParser {
 
     // Clean up the parsed data
     for (const section of this.sections) {
+      section.metadata.description = section.metadata.description.trim();
+
       for (const example of section.examples) {
         example.source = example.source.trim();
         example.tree = example.tree.trim();
         example.metadata.inputCode = example.metadata.inputCode.trim();
+        example.metadata.treeText = example.metadata.treeText.trim();
       }
     }
 
